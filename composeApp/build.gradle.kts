@@ -29,8 +29,11 @@ kotlin {
         androidMain.dependencies {
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
+            implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
+
         }
         commonMain.dependencies {
+            implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material3)

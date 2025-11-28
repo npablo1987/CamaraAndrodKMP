@@ -1,77 +1,86 @@
 package org.example.pvcamarakmp
 
+import android.Manifest
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.tooling.preview.Preview
-import android.Manifest
-import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import org.example.pvcamarakmp.App
+import androidx.compose.ui.graphics.asAndroidBitmap
+import kotlinx.coroutines.launch
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-
-
-
         setContent {
             val snackbarHostState = remember { SnackbarHostState() }
 
             var photo by remember { mutableStateOf<ImageBitmap?>(null) }
+            var geminiResponse by remember { mutableStateOf("") }
 
-            // launcher para pedir permiso de cámara
+            val scope = rememberCoroutineScope()
+            val geminiClient = remember { GeminiImageClient() }
+
+            // launcher permiso de cámara
             val permissionLauncher = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.RequestPermission()
             ) { granted ->
-                // si quieres mostrar un mensaje puedes usar el snackbar
+                if (!granted) {
+                    scope.launch {
+                        snackbarHostState.showSnackbar("Permiso de cámara denegado")
+                    }
+                }
             }
 
-            // launcher para abrir la cámara (toma una foto previa, sin guardar archivo)
+            // launcher cámara (foto previa)
             val cameraLauncher = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.TakePicturePreview()
             ) { bitmap ->
                 if (bitmap != null) {
-                    photo = bitmap.asImageBitmap()   // convertimos a ImageBitmap para Compose
+                    photo = bitmap.asImageBitmap()
                 }
             }
 
             MaterialTheme {
                 Scaffold(
                     snackbarHost = { SnackbarHost(snackbarHostState) }
-                ) { _ ->
+                ) { padding ->
                     App(
+                        modifierPadding = padding,
+                        photo = photo,
+                        geminiText = geminiResponse,
                         onOpenCamera = {
-                            // primero pedimos permiso de cámara
+                            // pedir permiso + abrir cámara
                             permissionLauncher.launch(Manifest.permission.CAMERA)
-                            // luego abrimos la cámara (si el permiso ya está dado funciona directo)
                             cameraLauncher.launch(null)
                         },
-                        photo = photo
+                        onSendToGemini = {
+                            val img = photo
+                            if (img == null) {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Primero toma una foto")
+                                }
+                            } else {
+                                val bitmap = img.asAndroidBitmap()
+                                scope.launch {
+                                    val result = geminiClient.generateFromImage(
+                                        bitmap = bitmap,
+                                        userPrompt = "genera un diccionario de datos json para devolver la representacion del la imagen"
+                                    )
+                                    geminiResponse = result
+                                }
+                            }
+                        }
                     )
                 }
             }
         }
-
-
-
-
     }
-}
-
-@Preview
-@Composable
-fun AppAndroidPreview() {
-    App()
 }
